@@ -9,6 +9,7 @@ This is an MCP App that provides an `ask_user` tool for AI agents to ask users m
 Key features:
 - **Multi-question tabs**: Ask multiple questions displayed as navigable tabs
 - **Keyboard navigation**: Tab/Shift+Tab for tabs, Arrow keys for options, Enter to select/submit
+- **"Other" input handling**: When user clicks "Other", textbox auto-focuses; Arrow keys work for editing; Tab/Escape blur the input
 - **Auto-navigation**: Single-select questions auto-advance to next tab
 - **Response format**: `question -> answer` format for clear output
 
@@ -48,11 +49,11 @@ ask-user-mcp-app/
 │   │   ├── QuestionHeader.tsx   # Header tag + question text
 │   │   ├── OptionButton.tsx     # Individual option with radio/checkbox + focus state
 │   │   ├── OptionList.tsx       # List of OptionButtons with focusedIndex
-│   │   ├── OtherInput.tsx       # "Other" option with text input + focus state
+│   │   ├── OtherInput.tsx       # "Other" option with text input; imperatively focuses on toggle, blurs on Tab/Escape
 │   │   ├── SubmitButton.tsx     # Submit button
 │   │   └── index.ts             # Barrel export
 │   ├── hooks/             # Custom React hooks
-│   │   ├── useTabNavigation.ts    # Tab/Shift+Tab & arrow key tab navigation
+│   │   ├── useTabNavigation.ts    # Tab/Shift+Tab & arrow key tab navigation; Tab works even when focused on input
 │   │   └── useOptionNavigation.ts # Arrow key option navigation, Enter/Space select
 │   ├── types/index.ts     # TypeScript interfaces (QuestionConfig, MultiQuestionState)
 │   └── styles/app.css     # Tailwind directives + CSS variables
@@ -192,6 +193,7 @@ const [viewState, setViewState] = useState<ViewState>('selecting');
 
 ```typescript
 // Tab navigation (Tab/Shift+Tab, Arrow Left/Right)
+// NOTE: Tab key works even when user is focused on the "Other" text input
 useTabNavigation({
   questions,
   activeTab: state.activeTab,
@@ -200,6 +202,7 @@ useTabNavigation({
 });
 
 // Option navigation (Arrow Up/Down, Enter/Space)
+// NOTE: Arrow keys are disabled when user is focused on the "Other" text input (allows normal text editing)
 const { focusedIndex } = useOptionNavigation({
   options: activeQuestion?.options ?? [],
   hasOther: activeQuestion?.allowOther ?? false,
@@ -251,6 +254,22 @@ const { focusedIndex } = useOptionNavigation({
 1. Create hook in `src/hooks/`
 2. Import and use in `src/mcp-app.tsx`
 3. Pass appropriate `enabled` flag to control when hook is active
+
+### Understanding "Other" Input Keyboard Behavior
+
+The `OtherInput` component uses an imperative ref callback to focus the textbox only when the user **first clicks** the "Other" button (not on tab navigation back):
+
+- **Focus**: User clicks "Other" → textbox auto-focuses imperatively via ref callback
+- **Arrow keys**: Work normally inside textbox for text editing (cursor movement, selection)
+- **Tab key**: Blurs the input and navigates to the next tab (handled by `useTabNavigation`)
+- **Escape key**: Blurs the input without navigating (handled by `OtherInput`'s `onKeyDown`)
+
+This prevents focus on tab navigation back while allowing direct text editing experience.
+
+To modify this behavior:
+- Change focus trigger: Edit the ref callback condition in `OtherInput.tsx`
+- Change Tab behavior: Update the `Tab` handler in `useTabNavigation.ts` (currently allows Tab in inputs)
+- Add keyboard shortcuts: Extend `OtherInput`'s `onKeyDown` handler
 
 ### Key Component Hierarchy
 

@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 interface OtherInputProps {
   isSelected: boolean;
   value: string;
@@ -8,6 +10,22 @@ interface OtherInputProps {
 }
 
 export function OtherInput({ isSelected, value, multiSelect, onToggle, onChange, focused }: OtherInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const prevIsSelectedRef = useRef(isSelected);
+
+  // Track if we just toggled (imperatively)
+  const justToggled = isSelected && !prevIsSelectedRef.current;
+  prevIsSelectedRef.current = isSelected;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      inputRef.current?.blur();
+    } else if (e.key === 'Tab') {
+      inputRef.current?.blur();
+      // Don't preventDefault - let useTabNavigation handle it
+    }
+    // All other keys (including arrow keys) pass through normally for text editing
+  };
   return (
     <div className="mt-2">
       <button
@@ -54,11 +72,18 @@ export function OtherInput({ isSelected, value, multiSelect, onToggle, onChange,
       {isSelected && (
         <div className="mt-2 ml-8">
           <input
+            ref={(el) => {
+              inputRef.current = el;
+              // Focus imperatively only when "Other" is first toggled on
+              if (el && justToggled) {
+                el.focus();
+              }
+            }}
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Enter your answer..."
-            autoFocus
             className="
               w-full px-3 py-2 rounded-lg border-2 border-border
               bg-surface text-text-primary placeholder-text-secondary

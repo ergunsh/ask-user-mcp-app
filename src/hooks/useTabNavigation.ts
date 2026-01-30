@@ -35,15 +35,15 @@ export function useTabNavigation({
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      // Tab / Shift+Tab to navigate between tabs
+      // Tab / Shift+Tab to navigate between tabs - should work even when focused on input
       if (e.key === 'Tab') {
         e.preventDefault();
         navigateTab(e.shiftKey ? 'prev' : 'next');
+        return;
+      }
+
+      // Don't handle other keys if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
