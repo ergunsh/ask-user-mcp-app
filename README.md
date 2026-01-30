@@ -1,12 +1,16 @@
 # Ask User MCP App
 
-An MCP App that enables AI agents to ask users questions with multiple-choice options, multi-select support, and custom text input - all rendered inline in the conversation.
+An MCP App that enables AI agents to ask users multiple questions with tab-based navigation, multiple-choice options, multi-select support, and custom text input - all rendered inline in the conversation.
 
 ## Features
 
-- **Multiple Choice Questions**: Present 2-4 options for users to choose from
+- **Multi-Question Tabs**: Ask multiple questions at once, displayed as navigable tabs
+- **Keyboard Navigation**: Tab/Shift+Tab to navigate tabs, Arrow keys for options, Enter to select/submit
+- **Auto-Navigation**: Single-select questions automatically advance to the next tab
+- **Multiple Choice Questions**: Present 2-4 options per question
 - **Single & Multi-Select**: Support both radio-button style (single) and checkbox style (multi) selection
 - **Custom "Other" Input**: Optional text input for answers not covered by predefined options
+- **Skip Questions**: Non-required questions can be skipped
 - **Theme Support**: Automatically adapts to host's light/dark theme
 - **Dual Transport**: Works with both HTTP (web clients) and stdio (desktop clients)
 
@@ -85,15 +89,24 @@ Add the tunnel URL as a custom connector in your client's settings.
 
 ## Tool Schema
 
-The `ask_user` tool accepts the following parameters:
+The `ask_user` tool accepts a `questions` array containing one or more questions to display as tabs:
+
+### Top-Level Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `question` | string | Yes | The question to ask the user |
-| `header` | string | No | Short label displayed as a tag (max 12 chars) |
+| `questions` | array | Yes | Array of question objects (minimum 1) |
+
+### Question Object Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `question` | string | Yes | The question to ask (also used as unique identifier) |
+| `header` | string | Yes | Short label displayed as tab name (max 12 chars) |
 | `options` | array | Yes | 2-4 choices, each with `label`, `value`, and optional `description` |
 | `multiSelect` | boolean | No | Allow multiple selections (default: false) |
 | `allowOther` | boolean | No | Include "Other" text input option (default: true) |
+| `required` | boolean | No | Whether this question must be answered (default: false) |
 
 ### Example Tool Call
 
@@ -101,30 +114,60 @@ The `ask_user` tool accepts the following parameters:
 {
   "name": "ask_user",
   "arguments": {
-    "question": "Which authentication method should we use?",
-    "header": "Auth",
-    "options": [
+    "questions": [
       {
-        "label": "OAuth 2.0",
-        "value": "oauth",
-        "description": "Industry standard, supports SSO"
+        "question": "Which frontend framework would you like to use for this project?",
+        "header": "Framework",
+        "options": [
+          { "label": "React", "value": "react", "description": "Popular library with component-based architecture" },
+          { "label": "Vue", "value": "vue", "description": "Progressive framework for simplicity" },
+          { "label": "Svelte", "value": "svelte", "description": "Compiler-based, highly optimized" }
+        ],
+        "required": true
       },
       {
-        "label": "JWT",
-        "value": "jwt",
-        "description": "Stateless, good for APIs"
+        "question": "How should we handle authentication?",
+        "header": "Auth Method",
+        "options": [
+          { "label": "OAuth 2.0", "value": "oauth", "description": "Industry standard, supports SSO" },
+          { "label": "JWT", "value": "jwt", "description": "Stateless, good for APIs" },
+          { "label": "Session-based", "value": "session", "description": "Traditional, server-side state" }
+        ]
       },
       {
-        "label": "Session-based",
-        "value": "session",
-        "description": "Traditional, server-side state"
+        "question": "Which testing frameworks should we include?",
+        "header": "Testing",
+        "options": [
+          { "label": "Jest", "value": "jest", "description": "Popular testing framework" },
+          { "label": "Vitest", "value": "vitest", "description": "Fast, Vite-native testing" },
+          { "label": "Playwright", "value": "playwright", "description": "E2E testing" }
+        ],
+        "multiSelect": true
       }
-    ],
-    "multiSelect": false,
-    "allowOther": true
+    ]
   }
 }
 ```
+
+### Response Format
+
+When the user submits their answers, the response is formatted as:
+
+```
+Which frontend framework would you like to use for this project? -> React
+How should we handle authentication? -> JWT
+Which testing frameworks should we include? -> Vitest, Playwright
+```
+
+## Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| Tab / Shift+Tab | Navigate between question tabs |
+| Arrow Left / Right | Navigate between question tabs |
+| Arrow Up / Down | Navigate between options in current question |
+| Enter / Space | Select current option |
+| Enter (on Submit tab) | Submit all answers |
 
 ## Development
 
@@ -169,10 +212,29 @@ The `ask_user` tool accepts the following parameters:
                     postMessage communication
 ```
 
+### Key Files
+
 - **server.ts**: Registers the `ask_user` tool and `ui://` resource
 - **main.ts**: Entry point supporting HTTP and stdio transports
-- **mcp-app.tsx**: React UI using `@modelcontextprotocol/ext-apps` SDK
+- **mcp-app.tsx**: React UI with multi-question state management
 - **vite.config.ts**: Bundles UI into single HTML file via `vite-plugin-singlefile`
+
+### UI Components
+
+| Component | Purpose |
+|-----------|---------|
+| `TabBar` | Horizontal tab navigation with checkboxes and Submit tab |
+| `QuestionPanel` | Renders individual question content |
+| `SubmitTab` | Review page showing all answers before submission |
+| `OptionList` / `OptionButton` | Option selection UI |
+| `OtherInput` | Custom text input option |
+
+### Navigation Hooks
+
+| Hook | Purpose |
+|------|---------|
+| `useTabNavigation` | Handles Tab/Shift+Tab and arrow key navigation between tabs |
+| `useOptionNavigation` | Handles arrow key navigation and Enter/Space selection within options |
 
 ## Dependencies
 

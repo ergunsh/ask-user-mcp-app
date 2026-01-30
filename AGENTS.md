@@ -4,7 +4,13 @@ This document helps AI agents understand and navigate the codebase efficiently.
 
 ## Quick Overview
 
-This is an MCP App that provides an `ask_user` tool for AI agents to ask users multiple-choice questions with an interactive UI. The UI renders inline in the host client (Claude, ChatGPT, etc.).
+This is an MCP App that provides an `ask_user` tool for AI agents to ask users multiple questions with tab-based navigation and keyboard support. The UI renders inline in the host client (Claude, ChatGPT, etc.).
+
+Key features:
+- **Multi-question tabs**: Ask multiple questions displayed as navigable tabs
+- **Keyboard navigation**: Tab/Shift+Tab for tabs, Arrow keys for options, Enter to select/submit
+- **Auto-navigation**: Single-select questions auto-advance to next tab
+- **Response format**: `question -> answer` format for clear output
 
 ## Documentation Requirements
 
@@ -34,15 +40,21 @@ ask-user-mcp-app/
 ├── main.ts                # Entry point - HTTP and stdio transports
 ├── mcp-app.html           # UI entry point (Vite input)
 ├── src/
-│   ├── mcp-app.tsx        # Main React component - state management, MCP hooks
+│   ├── mcp-app.tsx        # Main React component - multi-question state management
 │   ├── components/        # UI components (all use TailwindCSS)
+│   │   ├── TabBar.tsx           # Tab navigation with checkboxes + Submit tab
+│   │   ├── QuestionPanel.tsx    # Renders single question content
+│   │   ├── SubmitTab.tsx        # Review page with answer summary
 │   │   ├── QuestionHeader.tsx   # Header tag + question text
-│   │   ├── OptionButton.tsx     # Individual option with radio/checkbox
-│   │   ├── OptionList.tsx       # List of OptionButtons
-│   │   ├── OtherInput.tsx       # "Other" option with text input
+│   │   ├── OptionButton.tsx     # Individual option with radio/checkbox + focus state
+│   │   ├── OptionList.tsx       # List of OptionButtons with focusedIndex
+│   │   ├── OtherInput.tsx       # "Other" option with text input + focus state
 │   │   ├── SubmitButton.tsx     # Submit button
 │   │   └── index.ts             # Barrel export
-│   ├── types/index.ts     # TypeScript interfaces
+│   ├── hooks/             # Custom React hooks
+│   │   ├── useTabNavigation.ts    # Tab/Shift+Tab & arrow key tab navigation
+│   │   └── useOptionNavigation.ts # Arrow key option navigation, Enter/Space select
+│   ├── types/index.ts     # TypeScript interfaces (QuestionConfig, MultiQuestionState)
 │   └── styles/app.css     # Tailwind directives + CSS variables
 ├── tsconfig.json          # Browser TypeScript (for Vite/React)
 ├── tsconfig.server.json   # Server TypeScript (for Node.js)
@@ -60,6 +72,32 @@ ask-user-mcp-app/
 - Use correct MIME type `RESOURCE_MIME_TYPE` (`text/html;profile=mcp-app`)
 - Normalize metadata for compatibility with all hosts
 
+**Schema Structure**: The tool accepts a `questions` array (always required, even for single question):
+
+```typescript
+const QuestionSchema = z.object({
+  question: z.string(),  // Also serves as unique identifier
+  header: z.string(),    // Required - displayed as tab label
+  options: z.array(z.object({
+    label: z.string(),
+    value: z.string(),
+    description: z.string().optional(),
+  })).min(2).max(4),
+  multiSelect: z.boolean().optional().default(false),
+  allowOther: z.boolean().optional().default(true),
+  required: z.boolean().optional().default(false),
+});
+
+const AskUserInputSchema = {
+  questions: z.array(QuestionSchema)
+    .min(1)
+    .refine(
+      (questions) => new Set(questions.map(q => q.question)).size === questions.length,
+      { message: 'All questions must have unique question text' }
+    ),
+};
+```
+
 ```typescript
 import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 
@@ -69,7 +107,7 @@ const resourceUri = 'ui://ask-user-mcp-app/mcp-app.html';
 registerAppTool(server, 'ask_user', {
   title: 'Ask User',
   description: '...',
-  inputSchema: { /* zod schema */ },
+  inputSchema: AskUserInputSchema,
   _meta: { ui: { resourceUri } },  // Links tool to its UI
 }, async (args) => {
   return { content: [{ type: 'text', text: '...' }] };
@@ -121,18 +159,52 @@ app.all('/mcp', async (req, res) => {
 Key patterns:
 - Uses `useApp()` hook from `@modelcontextprotocol/ext-apps/react`
 - Registers `ontoolinput` handler in `onAppCreated` callback
-- Tool arguments come via `params.arguments`
+- Tool arguments come via `params.arguments.questions`
 - User response sent via `app.sendMessage()`
 
+**State Management:**
+
 ```typescript
-const { app, isConnected, error } = useApp({
-  appInfo: { name: 'ask-user-mcp-app', version: '1.0.0' },
-  capabilities: {},
-  onAppCreated: (app) => {
-    app.ontoolinput = (params) => {
-      // params.arguments contains the tool input
-    };
-  },
+// Questions from tool input
+const [questions, setQuestions] = useState<QuestionConfig[]>([]);
+
+// Multi-question state
+const [state, setState] = useState<MultiQuestionState>({
+  answers: new Map(),        // Map<question text, SelectionState>
+  activeTab: '',             // Current tab (question text or 'submit')
+  answeredQuestions: new Set(), // Track which questions have answers
+});
+
+// View state: 'selecting' (tab UI) or 'ready' (compact post-submit)
+const [viewState, setViewState] = useState<ViewState>('selecting');
+```
+
+**Key handlers:**
+- `handleTabChange(tab)`: Update activeTab
+- `handleSelect(value)`: Update answer for current question, auto-navigate to next tab (single-select)
+- `handleOtherToggle()`: Toggle "Other" option
+- `handleOtherChange(value)`: Update "Other" text
+- `buildResponse()`: Aggregate answers in `question -> answer` format
+- `handleSubmit()`: Send response via `app.sendMessage()`
+
+**Navigation hooks:**
+
+```typescript
+// Tab navigation (Tab/Shift+Tab, Arrow Left/Right)
+useTabNavigation({
+  questions,
+  activeTab: state.activeTab,
+  onTabChange: handleTabChange,
+  enabled: viewState === 'selecting',
+});
+
+// Option navigation (Arrow Up/Down, Enter/Space)
+const { focusedIndex } = useOptionNavigation({
+  options: activeQuestion?.options ?? [],
+  hasOther: activeQuestion?.allowOther ?? false,
+  onSelect: handleSelect,
+  onOtherToggle: handleOtherToggle,
+  enabled: viewState === 'selecting' && !isOnSubmitTab,
 });
 ```
 
@@ -143,12 +215,23 @@ const { app, isConnected, error } = useApp({
 
 ## Common Tasks
 
-### Adding a New Tool Parameter
+### Adding a New Question Parameter
 
-1. Update Zod schema in `server.ts`
+1. Update `QuestionSchema` in `server.ts`
 2. Update `QuestionConfig` type in `src/types/index.ts`
 3. Handle the parameter in `src/mcp-app.tsx` (ontoolinput handler)
-4. Update UI components as needed
+4. Update `QuestionPanel` and/or other UI components as needed
+
+### Understanding the State Flow
+
+1. **Tool input received** → `ontoolinput` handler parses `questions` array
+2. **State initialized** → Empty `answers` Map, `activeTab` set to first question
+3. **User navigates** → `handleTabChange` updates `activeTab`
+4. **User selects option** → `handleSelect` updates `answers` Map
+   - Single-select: auto-navigates to next tab
+   - Multi-select: stays on current tab
+5. **User submits** → `handleSubmit` builds response in `question -> answer` format
+6. **Response sent** → `app.sendMessage()` fills chat input, view switches to 'ready'
 
 ### Modifying UI Appearance
 
@@ -161,7 +244,28 @@ const { app, isConnected, error } = useApp({
 
 1. Create component in `src/components/`
 2. Export from `src/components/index.ts`
-3. Import and use in `src/mcp-app.tsx`
+3. Import and use in `src/mcp-app.tsx` or parent component
+
+### Adding a New Hook
+
+1. Create hook in `src/hooks/`
+2. Import and use in `src/mcp-app.tsx`
+3. Pass appropriate `enabled` flag to control when hook is active
+
+### Key Component Hierarchy
+
+```
+mcp-app.tsx
+├── TabBar                    # Tab navigation
+│   └── Tab buttons (questions + submit)
+├── SubmitTab (when activeTab === 'submit')
+│   └── SubmitButton
+└── QuestionPanel (when activeTab is a question)
+    ├── QuestionHeader
+    ├── OptionList
+    │   └── OptionButton (for each option)
+    └── OtherInput (if allowOther)
+```
 
 ### Testing Changes
 
@@ -181,16 +285,53 @@ Test with basic-host from ext-apps repo or via Claude Desktop.
 
 ```typescript
 app.ontoolinput = (params) => {
-  const args = params.arguments; // Tool call arguments
+  const args = params.arguments as {
+    questions: Array<{
+      question: string;
+      header: string;
+      options: Array<{ label: string; value: string; description?: string }>;
+      multiSelect?: boolean;
+      allowOther?: boolean;
+      required?: boolean;
+    }>;
+  };
+
+  // Initialize questions and state
+  setQuestions(args.questions.map(q => ({...})));
+  setState({ answers: new Map(), activeTab: args.questions[0].question, ... });
 };
 ```
 
-### Sending User Response
+### Building and Sending User Response
 
 ```typescript
+// Build response in "question -> answer" format
+const buildResponse = () => {
+  const responses: string[] = [];
+  questions.forEach((q) => {
+    const answer = state.answers.get(q.question);
+    if (!answer) return;
+
+    const parts: string[] = [];
+    answer.selected.forEach((value) => {
+      const option = q.options.find((o) => o.value === value);
+      if (option) parts.push(option.label);
+    });
+    if (answer.isOtherSelected && answer.otherText.trim()) {
+      parts.push(`Other: ${answer.otherText.trim()}`);
+    }
+
+    if (parts.length > 0) {
+      responses.push(`${q.question} -> ${parts.join(', ')}`);
+    }
+  });
+  return responses.join('\n');
+};
+
+// Send to chat
 await app.sendMessage({
   role: 'user',
-  content: [{ type: 'text', text: 'User response here' }],
+  content: [{ type: 'text', text: buildResponse() }],
 });
 ```
 
