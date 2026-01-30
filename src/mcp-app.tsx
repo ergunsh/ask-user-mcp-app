@@ -5,6 +5,8 @@ import { QuestionHeader, OptionList, OtherInput, SubmitButton } from './componen
 import type { QuestionConfig, SelectionState } from './types';
 import './styles/app.css';
 
+type ViewState = 'selecting' | 'ready';
+
 function AskUserApp() {
   const [config, setConfig] = useState<QuestionConfig | null>(null);
   const [selection, setSelection] = useState<SelectionState>({
@@ -12,7 +14,7 @@ function AskUserApp() {
     otherText: '',
     isOtherSelected: false,
   });
-  const [submitted, setSubmitted] = useState(false);
+  const [viewState, setViewState] = useState<ViewState>('selecting');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   const { app, isConnected, error } = useApp({
@@ -133,24 +135,30 @@ function AskUserApp() {
     return parts.join(', ');
   }, [config?.options, selection]);
 
-  // Handle submit
+  // Handle submit - sends to chat input (user still needs to press Enter)
   const handleSubmit = useCallback(async () => {
     if (!app || !config) return;
 
     const response = buildResponse();
 
     try {
-      // Send message to continue conversation with user's response
+      // Send message to chat input (fills textarea, doesn't auto-submit)
       await app.sendMessage({
         role: 'user',
-        content: [{ type: 'text', text: `User selected: ${response}` }],
+        content: [{ type: 'text', text: response }],
       });
 
-      setSubmitted(true);
+      // Switch to compact "ready" view
+      setViewState('ready');
     } catch (err) {
       console.error('Failed to send response:', err);
     }
   }, [app, config, buildResponse]);
+
+  // Handle edit - go back to selection view
+  const handleEdit = useCallback(() => {
+    setViewState('selecting');
+  }, []);
 
   // Check if submit is enabled
   const canSubmit = selection.selected.size > 0 ||
@@ -159,7 +167,7 @@ function AskUserApp() {
   // Error state
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[200px] p-4">
+      <div className="flex items-center justify-center min-h-[100px] p-4">
         <div className="text-red-500">Error: {error.message}</div>
       </div>
     );
@@ -168,29 +176,40 @@ function AskUserApp() {
   // Loading state
   if (!isConnected || !config) {
     return (
-      <div className="flex items-center justify-center min-h-[200px] p-4">
+      <div className="flex items-center justify-center min-h-[100px] p-4">
         <div className="text-text-secondary">Loading...</div>
       </div>
     );
   }
 
-  // Submitted state
-  if (submitted) {
+  // Compact "ready" state - shows selected answer with option to edit
+  if (viewState === 'ready') {
     return (
-      <div className="p-4">
-        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="font-medium">Response submitted</span>
+      <div className="p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg className="w-4 h-4 flex-shrink-0 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="text-sm text-text-secondary truncate">
+              {buildResponse()}
+            </span>
+          </div>
+          <button
+            onClick={handleEdit}
+            className="flex-shrink-0 px-3 py-1 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
+          >
+            Edit
+          </button>
         </div>
-        <div className="mt-2 text-sm text-text-secondary">
-          {buildResponse()}
-        </div>
+        <p className="mt-1 text-xs text-text-secondary opacity-70">
+          Press Enter in chat to send, or click Edit to change
+        </p>
       </div>
     );
   }
 
+  // Selection state - full form
   return (
     <div className="p-4 max-w-md mx-auto">
       <QuestionHeader header={config.header} question={config.question} />

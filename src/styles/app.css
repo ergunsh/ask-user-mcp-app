@@ -32,6 +32,8 @@ body {
   color: var(--mcp-text-primary);
 }
 
-#root {
-  @apply min-h-screen;
+/* Let content determine height for auto-resize to work */
+html, body, #root {
+  height: auto;
+  min-height: auto;
 }
