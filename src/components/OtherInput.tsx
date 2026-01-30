@@ -4,9 +4,10 @@ interface OtherInputProps {
   multiSelect: boolean;
   onToggle: () => void;
   onChange: (value: string) => void;
+  focused?: boolean;
 }
 
-export function OtherInput({ isSelected, value, multiSelect, onToggle, onChange }: OtherInputProps) {
+export function OtherInput({ isSelected, value, multiSelect, onToggle, onChange, focused }: OtherInputProps) {
   return (
     <div className="mt-2">
       <button
@@ -20,6 +21,7 @@ export function OtherInput({ isSelected, value, multiSelect, onToggle, onChange 
             ? 'border-primary bg-primary/5'
             : 'border-border bg-surface'
           }
+          ${focused ? 'ring-2 ring-primary/50' : ''}
         `}
       >
         <div className="flex items-center gap-3">

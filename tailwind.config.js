@@ -13,6 +13,7 @@ export default {
         'primary-hover': 'var(--mcp-primary-hover, #2563eb)',
         surface: 'var(--mcp-surface, #ffffff)',
         'surface-secondary': 'var(--mcp-surface-secondary, #f3f4f6)',
+        text: 'var(--mcp-text-primary, #111827)',
         'text-primary': 'var(--mcp-text-primary, #111827)',
         'text-secondary': 'var(--mcp-text-secondary, #6b7280)',
         border: 'var(--mcp-border, #e5e7eb)',

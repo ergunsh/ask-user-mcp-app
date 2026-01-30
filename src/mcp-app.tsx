@@ -1,18 +1,20 @@
 import { StrictMode, useState, useCallback, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp } from '@modelcontextprotocol/ext-apps/react';
-import { QuestionHeader, OptionList, OtherInput, SubmitButton } from './components';
-import type { QuestionConfig, SelectionState } from './types';
+import { TabBar, SubmitTab, QuestionPanel } from './components';
+import { useTabNavigation } from './hooks/useTabNavigation';
+import { useOptionNavigation } from './hooks/useOptionNavigation';
+import type { QuestionConfig, SelectionState, MultiQuestionState } from './types';
 import './styles/app.css';
 
 type ViewState = 'selecting' | 'ready';
 
 function AskUserApp() {
-  const [config, setConfig] = useState<QuestionConfig | null>(null);
-  const [selection, setSelection] = useState<SelectionState>({
-    selected: new Set(),
-    otherText: '',
-    isOtherSelected: false,
+  const [questions, setQuestions] = useState<QuestionConfig[]>([]);
+  const [state, setState] = useState<MultiQuestionState>({
+    answers: new Map(),
+    activeTab: '',
+    answeredQuestions: new Set(),
   });
   const [viewState, setViewState] = useState<ViewState>('selecting');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -24,20 +26,32 @@ function AskUserApp() {
       // Register notification handler for tool input
       app.ontoolinput = (params) => {
         const args = params.arguments as {
-          question: string;
-          header?: string;
-          options: Array<{ label: string; value: string; description?: string }>;
-          multiSelect?: boolean;
-          allowOther?: boolean;
+          questions: Array<{
+            question: string;
+            header: string;
+            options: Array<{ label: string; value: string; description?: string }>;
+            multiSelect?: boolean;
+            allowOther?: boolean;
+            required?: boolean;
+          }>;
         };
 
-        setConfig({
-          question: args.question,
-          header: args.header,
-          options: args.options,
-          multiSelect: args.multiSelect ?? false,
-          allowOther: args.allowOther ?? true,
+        const questionsConfig: QuestionConfig[] = args.questions.map((q) => ({
+          question: q.question,
+          header: q.header,
+          options: q.options,
+          multiSelect: q.multiSelect ?? false,
+          allowOther: q.allowOther ?? true,
+          required: q.required ?? false,
+        }));
+
+        setQuestions(questionsConfig);
+        setState({
+          answers: new Map(),
+          activeTab: questionsConfig[0]?.question ?? '',
+          answeredQuestions: new Set(),
         });
+        setViewState('selecting');
       };
 
       // Handle theme changes from host
@@ -64,12 +78,46 @@ function AskUserApp() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Get active question config
+  const activeQuestion = questions.find((q) => q.question === state.activeTab);
+
+  // Get current selection for active question
+  const currentSelection: SelectionState = state.answers.get(state.activeTab) ?? {
+    selected: new Set(),
+    otherText: '',
+    isOtherSelected: false,
+  };
+
+  // Handle tab change
+  const handleTabChange = useCallback((tab: string) => {
+    setState((prev) => ({ ...prev, activeTab: tab }));
+  }, []);
+
+  // Get next tab in sequence
+  const getNextTab = useCallback((currentTab: string) => {
+    const currentIndex = questions.findIndex((q) => q.question === currentTab);
+    if (currentIndex === -1) return 'submit';
+    if (currentIndex < questions.length - 1) {
+      return questions[currentIndex + 1].question;
+    }
+    return 'submit';
+  }, [questions]);
+
   // Handle option selection
   const handleSelect = useCallback((value: string) => {
-    setSelection((prev) => {
-      const newSelected = new Set(prev.selected);
+    setState((prev) => {
+      const activeQuestion = questions.find((q) => q.question === prev.activeTab);
+      if (!activeQuestion) return prev;
 
-      if (config?.multiSelect) {
+      const currentAnswer = prev.answers.get(prev.activeTab) ?? {
+        selected: new Set<string>(),
+        otherText: '',
+        isOtherSelected: false,
+      };
+
+      const newSelected = new Set(currentAnswer.selected);
+
+      if (activeQuestion.multiSelect) {
         // Multi-select: toggle selection
         if (newSelected.has(value)) {
           newSelected.delete(value);
@@ -82,67 +130,148 @@ function AskUserApp() {
         newSelected.add(value);
       }
 
-      return {
-        ...prev,
+      const newAnswer = {
+        ...currentAnswer,
         selected: newSelected,
         // Deselect "Other" when selecting a regular option in single-select mode
-        isOtherSelected: config?.multiSelect ? prev.isOtherSelected : false,
+        isOtherSelected: activeQuestion.multiSelect ? currentAnswer.isOtherSelected : false,
+      };
+
+      const newAnswers = new Map(prev.answers);
+      newAnswers.set(prev.activeTab, newAnswer);
+
+      // Update answered questions
+      const newAnsweredQuestions = new Set(prev.answeredQuestions);
+      if (newAnswer.selected.size > 0 || (newAnswer.isOtherSelected && newAnswer.otherText.trim().length > 0)) {
+        newAnsweredQuestions.add(prev.activeTab);
+      } else {
+        newAnsweredQuestions.delete(prev.activeTab);
+      }
+
+      // Auto-navigate to next tab for single-select
+      const nextTab = activeQuestion.multiSelect ? prev.activeTab : getNextTab(prev.activeTab);
+
+      return {
+        ...prev,
+        answers: newAnswers,
+        answeredQuestions: newAnsweredQuestions,
+        activeTab: nextTab,
       };
     });
-  }, [config?.multiSelect]);
+  }, [questions, getNextTab]);
 
   // Handle "Other" toggle
   const handleOtherToggle = useCallback(() => {
-    setSelection((prev) => {
-      const newIsOtherSelected = !prev.isOtherSelected;
+    setState((prev) => {
+      const activeQuestion = questions.find((q) => q.question === prev.activeTab);
+      if (!activeQuestion) return prev;
 
-      if (config?.multiSelect) {
+      const currentAnswer = prev.answers.get(prev.activeTab) ?? {
+        selected: new Set<string>(),
+        otherText: '',
+        isOtherSelected: false,
+      };
+
+      const newIsOtherSelected = !currentAnswer.isOtherSelected;
+
+      let newAnswer: SelectionState;
+      if (activeQuestion.multiSelect) {
         // Multi-select: just toggle "Other"
-        return { ...prev, isOtherSelected: newIsOtherSelected };
+        newAnswer = { ...currentAnswer, isOtherSelected: newIsOtherSelected };
       } else {
         // Single-select: deselect other options when selecting "Other"
-        return {
-          selected: newIsOtherSelected ? new Set() : prev.selected,
-          otherText: prev.otherText,
+        newAnswer = {
+          selected: newIsOtherSelected ? new Set() : currentAnswer.selected,
+          otherText: currentAnswer.otherText,
           isOtherSelected: newIsOtherSelected,
         };
       }
+
+      const newAnswers = new Map(prev.answers);
+      newAnswers.set(prev.activeTab, newAnswer);
+
+      // Update answered questions
+      const newAnsweredQuestions = new Set(prev.answeredQuestions);
+      if (newAnswer.selected.size > 0 || (newAnswer.isOtherSelected && newAnswer.otherText.trim().length > 0)) {
+        newAnsweredQuestions.add(prev.activeTab);
+      } else {
+        newAnsweredQuestions.delete(prev.activeTab);
+      }
+
+      return {
+        ...prev,
+        answers: newAnswers,
+        answeredQuestions: newAnsweredQuestions,
+      };
     });
-  }, [config?.multiSelect]);
+  }, [questions]);
 
   // Handle "Other" text change
   const handleOtherChange = useCallback((value: string) => {
-    setSelection((prev) => ({ ...prev, otherText: value }));
+    setState((prev) => {
+      const currentAnswer = prev.answers.get(prev.activeTab) ?? {
+        selected: new Set<string>(),
+        otherText: '',
+        isOtherSelected: false,
+      };
+
+      const newAnswer = { ...currentAnswer, otherText: value };
+      const newAnswers = new Map(prev.answers);
+      newAnswers.set(prev.activeTab, newAnswer);
+
+      // Update answered questions
+      const newAnsweredQuestions = new Set(prev.answeredQuestions);
+      if (newAnswer.selected.size > 0 || (newAnswer.isOtherSelected && newAnswer.otherText.trim().length > 0)) {
+        newAnsweredQuestions.add(prev.activeTab);
+      } else {
+        newAnsweredQuestions.delete(prev.activeTab);
+      }
+
+      return {
+        ...prev,
+        answers: newAnswers,
+        answeredQuestions: newAnsweredQuestions,
+      };
+    });
   }, []);
 
-  // Build response text
+  // Build response text in "question -> answer" format
   const buildResponse = useCallback(() => {
-    const parts: string[] = [];
+    const responses: string[] = [];
 
-    // Add selected options
-    selection.selected.forEach((value) => {
-      const option = config?.options.find((o) => o.value === value);
-      if (option) {
-        parts.push(option.label);
+    questions.forEach((q) => {
+      const answer = state.answers.get(q.question);
+      if (!answer) return;
+
+      const parts: string[] = [];
+
+      // Add selected options
+      answer.selected.forEach((value) => {
+        const option = q.options.find((o) => o.value === value);
+        if (option) parts.push(option.label);
+      });
+
+      // Add "Other" response
+      if (answer.isOtherSelected && answer.otherText.trim()) {
+        parts.push(`Other: ${answer.otherText.trim()}`);
+      }
+
+      if (parts.length > 0) {
+        responses.push(`${q.question} -> ${parts.join(', ')}`);
       }
     });
 
-    // Add "Other" response
-    if (selection.isOtherSelected && selection.otherText.trim()) {
-      parts.push(`Other: ${selection.otherText.trim()}`);
-    }
+    return responses.join('\n');
+  }, [questions, state.answers]);
 
-    return parts.join(', ');
-  }, [config?.options, selection]);
-
-  // Handle submit - sends to chat input (user still needs to press Enter)
+  // Handle submit
   const handleSubmit = useCallback(async () => {
-    if (!app || !config) return;
+    if (!app) return;
 
     const response = buildResponse();
 
     try {
-      // Send message to chat input (fills textarea, doesn't auto-submit)
+      // Send message to chat input
       await app.sendMessage({
         role: 'user',
         content: [{ type: 'text', text: response }],
@@ -153,16 +282,30 @@ function AskUserApp() {
     } catch (err) {
       console.error('Failed to send response:', err);
     }
-  }, [app, config, buildResponse]);
+  }, [app, buildResponse]);
 
   // Handle edit - go back to selection view
   const handleEdit = useCallback(() => {
     setViewState('selecting');
   }, []);
 
-  // Check if submit is enabled
-  const canSubmit = selection.selected.size > 0 ||
-    (selection.isOtherSelected && selection.otherText.trim().length > 0);
+  // Keyboard navigation - only enabled when not in submit tab
+  const isOnSubmitTab = state.activeTab === 'submit';
+
+  useTabNavigation({
+    questions,
+    activeTab: state.activeTab,
+    onTabChange: handleTabChange,
+    enabled: viewState === 'selecting',
+  });
+
+  const { focusedIndex } = useOptionNavigation({
+    options: activeQuestion?.options ?? [],
+    hasOther: activeQuestion?.allowOther ?? false,
+    onSelect: handleSelect,
+    onOtherToggle: handleOtherToggle,
+    enabled: viewState === 'selecting' && !isOnSubmitTab && !!activeQuestion,
+  });
 
   // Error state
   if (error) {
@@ -174,7 +317,7 @@ function AskUserApp() {
   }
 
   // Loading state
-  if (!isConnected || !config) {
+  if (!isConnected || questions.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[100px] p-4">
         <div className="text-text-secondary">Loading...</div>
@@ -192,7 +335,7 @@ function AskUserApp() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             <span className="text-sm text-text-secondary truncate">
-              {buildResponse()}
+              {buildResponse().replace(/\n/g, ' | ')}
             </span>
           </div>
           <button
@@ -209,29 +352,36 @@ function AskUserApp() {
     );
   }
 
-  // Selection state - full form
+  // Selection state - tab interface
   return (
     <div className="p-4 max-w-md mx-auto">
-      <QuestionHeader header={config.header} question={config.question} />
-
-      <OptionList
-        options={config.options}
-        selected={selection.selected}
-        multiSelect={config.multiSelect}
-        onSelect={handleSelect}
+      <TabBar
+        questions={questions}
+        activeTab={state.activeTab}
+        answeredQuestions={state.answeredQuestions}
+        onTabChange={handleTabChange}
       />
 
-      {config.allowOther && (
-        <OtherInput
-          isSelected={selection.isOtherSelected}
-          value={selection.otherText}
-          multiSelect={config.multiSelect}
-          onToggle={handleOtherToggle}
-          onChange={handleOtherChange}
+      {state.activeTab === 'submit' ? (
+        <SubmitTab
+          questions={questions}
+          answers={state.answers}
+          onSubmit={handleSubmit}
         />
-      )}
+      ) : activeQuestion ? (
+        <QuestionPanel
+          config={activeQuestion}
+          selection={currentSelection}
+          onSelect={handleSelect}
+          onOtherToggle={handleOtherToggle}
+          onOtherChange={handleOtherChange}
+          focusedIndex={focusedIndex}
+        />
+      ) : null}
 
-      <SubmitButton disabled={!canSubmit} onClick={handleSubmit} />
+      <p className="mt-4 text-xs text-text-secondary text-center">
+        Enter to select &middot; Tab/Arrow keys to navigate &middot; Esc to cancel
+      </p>
     </div>
   );
 }

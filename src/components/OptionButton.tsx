@@ -5,9 +5,10 @@ interface OptionButtonProps {
   isSelected: boolean;
   multiSelect: boolean;
   onSelect: (value: string) => void;
+  focused?: boolean;
 }
 
-export function OptionButton({ option, isSelected, multiSelect, onSelect }: OptionButtonProps) {
+export function OptionButton({ option, isSelected, multiSelect, onSelect, focused }: OptionButtonProps) {
   return (
     <button
       type="button"
@@ -20,6 +21,7 @@ export function OptionButton({ option, isSelected, multiSelect, onSelect }: Opti
           ? 'border-primary bg-primary/5'
           : 'border-border bg-surface'
         }
+        ${focused ? 'ring-2 ring-primary/50' : ''}
       `}
     >
       <div className="flex items-start gap-3">

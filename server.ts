@@ -10,10 +10,10 @@ const DIST_DIR = import.meta.filename.endsWith('.ts')
   ? path.join(import.meta.dirname, 'dist')
   : import.meta.dirname;
 
-// Schema for the ask_user tool input
-const AskUserInputSchema = {
-  question: z.string().describe('The question to ask the user'),
-  header: z.string().optional().describe('Short label displayed as a tag (max 12 chars), e.g., "Auth method"'),
+// Schema for a single question
+const QuestionSchema = z.object({
+  question: z.string().describe('The question to ask the user (also serves as unique identifier)'),
+  header: z.string().describe('Short label displayed as a tab (max 12 chars), e.g., "Framework"'),
   options: z.array(z.object({
     label: z.string().describe('Display text for this option'),
     value: z.string().describe('Value returned when this option is selected'),
@@ -21,6 +21,21 @@ const AskUserInputSchema = {
   })).min(2).max(4).describe('Available choices (2-4 options)'),
   multiSelect: z.boolean().optional().default(false).describe('Allow multiple selections'),
   allowOther: z.boolean().optional().default(true).describe('Include "Other" text input option'),
+  required: z.boolean().optional().default(false).describe('Whether this question must be answered'),
+});
+
+// Schema for the ask_user tool input - always requires questions array
+const AskUserInputSchema = {
+  questions: z.array(QuestionSchema)
+    .min(1)
+    .describe('Array of questions to ask the user, displayed as tabs')
+    .refine(
+      (questions) => {
+        const questionTexts = questions.map(q => q.question);
+        return new Set(questionTexts).size === questionTexts.length;
+      },
+      { message: 'All questions must have unique question text' }
+    ),
 };
 
 export function createServer(): McpServer {
@@ -43,11 +58,13 @@ export function createServer(): McpServer {
       _meta: { ui: { resourceUri } },
     },
     async (args): Promise<CallToolResult> => {
+      const questions = args.questions as Array<{ question: string; header: string }>;
+      const questionHeaders = questions.map(q => q.header).join(', ');
       return {
         content: [
           {
             type: 'text',
-            text: `Asking user: "${args.question}"`,
+            text: `Asking user ${questions.length} question(s): ${questionHeaders}`,
           },
         ],
       };
