@@ -9,16 +9,20 @@ export function SubmitButton({ disabled, onClick }: SubmitButtonProps) {
       type="button"
       onClick={onClick}
       disabled={disabled}
+      autoFocus
       className={`
-        w-full mt-4 px-4 py-3 rounded-lg font-medium transition-all duration-150
+        w-full p-3 text-left rounded-lg border-2 transition-all duration-150
+        hover:border-primary/50 hover:bg-surface-secondary
         focus:outline-none focus:ring-2 focus:ring-primary/30
         ${disabled
-          ? 'bg-surface-secondary text-text-secondary cursor-not-allowed'
-          : 'bg-primary text-white hover:bg-primary-hover active:scale-[0.98]'
+          ? 'border-border bg-surface text-text-secondary cursor-not-allowed'
+          : 'border-primary bg-primary/5'
         }
       `}
     >
-      Submit
+      <div className={`font-medium ${disabled ? 'text-text-secondary' : 'text-text-primary'}`}>
+        Review & Submit
+      </div>
     </button>
   );
 }
