@@ -6,7 +6,7 @@ An MCP App that enables AI agents to ask users multiple questions with tab-based
 
 - **Multi-Question Tabs**: Ask multiple questions at once, displayed as navigable tabs
 - **Keyboard Navigation**: Tab/Shift+Tab to navigate tabs, Arrow keys for options, Enter to select/submit
-- **Auto-Navigation**: Single-select questions automatically advance to the next tab
+- **Next/Submit Button**: Each question has a Next button to advance to the next tab (or "Review & Submit" on the last question)
 - **Multiple Choice Questions**: Present 2-4 options per question
 - **Single & Multi-Select**: Support both radio-button style (single) and checkbox style (multi) selection
 - **Custom "Other" Input**: Optional text input for answers not covered by predefined options

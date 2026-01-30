@@ -4,21 +4,30 @@ import type { Option } from '../types';
 interface UseOptionNavigationOptions {
   options: Option[];
   hasOther: boolean;
+  hasNext: boolean;
   onSelect: (value: string) => void;
   onOtherToggle: () => void;
+  onNext: () => void;
   enabled?: boolean;
 }
 
 export function useOptionNavigation({
   options,
   hasOther,
+  hasNext,
   onSelect,
   onOtherToggle,
+  onNext,
   enabled = true,
 }: UseOptionNavigationOptions) {
   const [focusedIndex, setFocusedIndex] = useState(0);
 
-  const totalOptions = options.length + (hasOther ? 1 : 0);
+  // Total navigable items: options + Other (if enabled) + Next (if enabled)
+  const totalItems = options.length + (hasOther ? 1 : 0) + (hasNext ? 1 : 0);
+
+  // Index positions
+  const otherIndex = hasOther ? options.length : -1;
+  const nextIndex = options.length + (hasOther ? 1 : 0);
 
   // Reset focused index when options change
   useEffect(() => {
@@ -28,10 +37,12 @@ export function useOptionNavigation({
   const selectFocused = useCallback(() => {
     if (focusedIndex < options.length) {
       onSelect(options[focusedIndex].value);
-    } else if (hasOther) {
+    } else if (hasOther && focusedIndex === otherIndex) {
       onOtherToggle();
+    } else if (hasNext && focusedIndex === nextIndex) {
+      onNext();
     }
-  }, [focusedIndex, options, hasOther, onSelect, onOtherToggle]);
+  }, [focusedIndex, options, hasOther, hasNext, otherIndex, nextIndex, onSelect, onOtherToggle, onNext]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -45,11 +56,11 @@ export function useOptionNavigation({
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
-          setFocusedIndex((prev) => (prev + 1) % totalOptions);
+          setFocusedIndex((prev) => (prev + 1) % totalItems);
           break;
         case 'ArrowUp':
           e.preventDefault();
-          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : totalOptions - 1));
+          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : totalItems - 1));
           break;
         case 'Enter':
         case ' ':
@@ -61,10 +72,11 @@ export function useOptionNavigation({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, totalOptions, selectFocused]);
+  }, [enabled, totalItems, selectFocused]);
 
   return {
     focusedIndex,
     setFocusedIndex,
+    nextIndex,
   };
 }

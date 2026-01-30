@@ -181,9 +181,10 @@ const [viewState, setViewState] = useState<ViewState>('selecting');
 
 **Key handlers:**
 - `handleTabChange(tab)`: Update activeTab
-- `handleSelect(value)`: Update answer for current question, auto-navigate to next tab (single-select)
+- `handleSelect(value)`: Update answer for current question
 - `handleOtherToggle()`: Toggle "Other" option
 - `handleOtherChange(value)`: Update "Other" text
+- `handleNext()`: Navigate to next tab (used by Next button)
 - `buildResponse()`: Aggregate answers in `question -> answer` format
 - `handleSubmit()`: Send response via `app.sendMessage()`
 
@@ -226,12 +227,11 @@ const { focusedIndex } = useOptionNavigation({
 
 1. **Tool input received** → `ontoolinput` handler parses `questions` array
 2. **State initialized** → Empty `answers` Map, `activeTab` set to first question
-3. **User navigates** → `handleTabChange` updates `activeTab`
-4. **User selects option** → `handleSelect` updates `answers` Map
-   - Single-select: auto-navigates to next tab
-   - Multi-select: stays on current tab
-5. **User submits** → `handleSubmit` builds response in `question -> answer` format
-6. **Response sent** → `app.sendMessage()` fills chat input, view switches to 'ready'
+3. **User navigates tabs** → `handleTabChange` updates `activeTab`
+4. **User selects option** → `handleSelect` updates `answers` Map for current question
+5. **User clicks Next** → `handleNext` advances to next tab (or Submit tab on last question)
+6. **User submits** → `handleSubmit` builds response in `question -> answer` format
+7. **Response sent** → `app.sendMessage()` fills chat input, view switches to 'ready'
 
 ### Modifying UI Appearance
 
@@ -264,7 +264,8 @@ mcp-app.tsx
     ├── QuestionHeader
     ├── OptionList
     │   └── OptionButton (for each option)
-    └── OtherInput (if allowOther)
+    ├── OtherInput (if allowOther)
+    └── Next/Review button    # Advances to next tab
 ```
 
 ### Testing Changes

@@ -148,7 +148,7 @@ function AskUserApp() {
         newAnsweredQuestions.delete(prev.activeTab);
       }
 
-      // Auto-navigate to next tab for single-select
+      // Auto-navigate to next tab for single-select (non-multiSelect) questions
       const nextTab = activeQuestion.multiSelect ? prev.activeTab : getNextTab(prev.activeTab);
 
       return {
@@ -159,6 +159,14 @@ function AskUserApp() {
       };
     });
   }, [questions, getNextTab]);
+
+  // Handle next button - navigate to next tab
+  const handleNext = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      activeTab: getNextTab(prev.activeTab),
+    }));
+  }, [getNextTab]);
 
   // Handle "Other" toggle
   const handleOtherToggle = useCallback(() => {
@@ -299,11 +307,13 @@ function AskUserApp() {
     enabled: viewState === 'selecting',
   });
 
-  const { focusedIndex } = useOptionNavigation({
+  const { focusedIndex, nextIndex } = useOptionNavigation({
     options: activeQuestion?.options ?? [],
     hasOther: activeQuestion?.allowOther ?? false,
+    hasNext: true,
     onSelect: handleSelect,
     onOtherToggle: handleOtherToggle,
+    onNext: handleNext,
     enabled: viewState === 'selecting' && !isOnSubmitTab && !!activeQuestion,
   });
 
@@ -375,7 +385,10 @@ function AskUserApp() {
           onSelect={handleSelect}
           onOtherToggle={handleOtherToggle}
           onOtherChange={handleOtherChange}
+          onNext={handleNext}
           focusedIndex={focusedIndex}
+          nextIndex={nextIndex}
+          isLastQuestion={questions.indexOf(activeQuestion) === questions.length - 1}
         />
       ) : null}
 
