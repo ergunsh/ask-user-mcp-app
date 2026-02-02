@@ -14,11 +14,18 @@ An MCP App that enables AI agents to ask users multiple questions with tab-based
 - **Theme Support**: Automatically adapts to host's light/dark theme
 - **Dual Transport**: Works with both HTTP (web clients) and stdio (desktop clients)
 
-## Installation
+### Installation in Claude.ai (Hosted)
 
-```bash
-npm install ask-user-mcp-app
-```
+Use the hosted MCP server directly with Claude's connector feature:
+
+1. Open [Claude.ai](https://claude.ai) and go to **Settings** → **Connectors**
+2. Click **Add custom connector** and enter:
+   - **Remote MCP server URL**: `https://ask-user-mcp-app.vercel.app/mcp`
+3. Save and start a new conversation
+
+The `ask_user` tool will now be available to Claude.
+
+## Installation
 
 Or clone and build locally:
 
@@ -55,48 +62,6 @@ Add to your `claude_desktop_config.json` (use the absolute path to your clone):
   }
 }
 ```
-
-### Claude Desktop (via npx)
-
-If published to npm, add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "ask-user": {
-      "command": "npx",
-      "args": ["ask-user-mcp-app", "--stdio"]
-    }
-  }
-}
-```
-
-### Claude.ai (Hosted)
-
-Use the hosted MCP server directly with Claude's connector feature:
-
-1. Open [Claude.ai](https://claude.ai) and go to **Settings** → **Connectors**
-2. Click **Add custom connector** and enter:
-   - **Remote MCP server URL**: `https://ask-user-mcp-app.vercel.app/mcp`
-3. Save and start a new conversation
-
-The `ask_user` tool will now be available to Claude.
-
-### Web Clients (Self-Hosted)
-
-Run your own instance:
-
-```bash
-npm start
-```
-
-The server runs at `http://localhost:3001/mcp`. For remote access, use a tunnel:
-
-```bash
-npx cloudflared tunnel --url http://localhost:3001
-```
-
-Add the tunnel URL as a custom connector in your client's settings.
 
 ## Tool Schema
 
