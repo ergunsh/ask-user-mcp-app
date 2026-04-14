@@ -19,6 +19,7 @@ function AskUserApp() {
   });
   const [viewState, setViewState] = useState<ViewState>('selecting');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isMobile, setIsMobile] = useState(false);
 
   const { app, isConnected, error } = useApp({
     appInfo: { name: 'ask-user-mcp-app', version: '1.0.0' },
@@ -55,21 +56,38 @@ function AskUserApp() {
         setViewState('selecting');
       };
 
-      // Handle theme changes from host
+      // Handle context changes from host
       app.onhostcontextchanged = (params) => {
         if (params.theme) {
           setTheme(params.theme);
+        }
+        if (params.platform !== undefined) {
+          setIsMobile(params.platform === 'mobile');
+        }
+        if (params.deviceCapabilities !== undefined) {
+          const { touch, hover } = params.deviceCapabilities;
+          if (touch !== undefined || hover !== undefined) {
+            setIsMobile(touch === true && hover === false);
+          }
         }
       };
     },
   });
 
-  // Apply theme from host context on initial connection
+  // Apply host context on initial connection
   useEffect(() => {
     if (app && isConnected) {
       const context = app.getHostContext();
       if (context?.theme) {
         setTheme(context.theme);
+      }
+      if (context?.platform === 'mobile') {
+        setIsMobile(true);
+      } else if (context?.deviceCapabilities) {
+        const { touch, hover } = context.deviceCapabilities;
+        if (touch === true && hover === false) {
+          setIsMobile(true);
+        }
       }
     }
   }, [app, isConnected]);
@@ -319,8 +337,9 @@ function AskUserApp() {
   });
 
   // Track window focus - only show focus outlines when window is actually focused
+  // On mobile (touch devices), hide focus outlines since tap interaction doesn't need them
   const isWindowFocused = useWindowFocus();
-  const effectiveFocusedIndex = isWindowFocused ? focusedIndex : undefined;
+  const effectiveFocusedIndex = isMobile ? undefined : (isWindowFocused ? focusedIndex : undefined);
 
   // Error state
   if (error) {
@@ -408,9 +427,11 @@ function AskUserApp() {
         />
       ) : null}
 
-      <p className="mt-4 text-xs text-text-muted text-center">
-        Use arrow keys to navigate, Enter to select
-      </p>
+      {!isMobile && (
+        <p className="mt-4 text-xs text-text-muted text-center">
+          Use arrow keys to navigate, Enter to select
+        </p>
+      )}
     </div>
   );
 }
