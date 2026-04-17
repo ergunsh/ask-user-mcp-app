@@ -2,10 +2,16 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import cors from 'cors';
 import type { Request, Response } from 'express';
+import { landingHtml } from '../landing.js';
 import { createServer } from '../server.js';
 
 const app = createMcpExpressApp({ host: '0.0.0.0' });
 app.use(cors());
+
+app.get('/', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(landingHtml);
+});
 
 app.all('/mcp', async (req: Request, res: Response) => {
   const server = createServer();

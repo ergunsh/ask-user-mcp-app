@@ -6,6 +6,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import cors from 'cors';
 import type { Express, Request, Response } from 'express';
+import { landingHtml } from './landing.js';
 import { createServer } from './server.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -46,6 +47,12 @@ function createExpressApp(createServerFn: () => McpServer): Express {
   // Health check endpoint
   app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok' });
+  });
+
+  // Landing page
+  app.get('/', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(landingHtml);
   });
 
   return app;

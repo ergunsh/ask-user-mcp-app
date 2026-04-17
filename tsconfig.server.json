@@ -11,6 +11,6 @@
     "rootDir": ".",
     "declaration": true
   },
-  "include": ["server.ts", "main.ts"],
+  "include": ["server.ts", "main.ts", "landing.ts"],
   "exclude": ["node_modules", "src"]
 }
