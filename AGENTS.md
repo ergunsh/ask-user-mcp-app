@@ -39,6 +39,9 @@ This ensures both users and future agents have accurate, up-to-date information.
 ask-user-mcp-app/
 ├── server.ts              # MCP server - tool + resource registration
 ├── main.ts                # Entry point - HTTP and stdio transports
+├── landing.ts             # Self-contained HTML for GET / landing page
+├── api/
+│   └── index.ts           # Vercel serverless entry (wires /, /mcp, /health)
 ├── mcp-app.html           # UI entry point (Vite input)
 ├── src/
 │   ├── mcp-app.tsx        # Main React component - multi-question state management
@@ -156,7 +159,24 @@ app.all('/mcp', async (req, res) => {
 });
 ```
 
-### 3. `src/mcp-app.tsx` - React UI
+### 3. `landing.ts` & `api/index.ts` - Public Landing Page
+
+`GET /` serves a self-contained HTML documentation page built from `landing.ts` (exports a `landingHtml` string with inline CSS and `prefers-color-scheme` dark variant — no external assets). Both the Vercel handler (`api/index.ts`) and the local-dev Express app (`main.ts`) register the route:
+
+```typescript
+app.get('/', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(landingHtml);
+});
+```
+
+The Vercel rewrite `/(.*) → /api` (see `vercel.json`) forwards every path to this Express app, so `/` hits the landing route, `/mcp` and `/health` hit their own routes, and anything else falls through to Express's default 404.
+
+**When updating the landing page:** keep it self-contained — no Tailwind, no external scripts, no fonts beyond system stack. It must serve from a single file with no build step.
+
+`landing.ts` lives at the project root (not `src/`) because `tsconfig.server.json` excludes `src/`. If moving it, update `include` in `tsconfig.server.json`.
+
+### 4. `src/mcp-app.tsx` - React UI
 
 Key patterns:
 - Uses `useApp()` hook from `@modelcontextprotocol/ext-apps/react`
@@ -217,7 +237,7 @@ const isWindowFocused = useWindowFocus();
 const effectiveFocusedIndex = isWindowFocused ? focusedIndex : undefined;
 ```
 
-### 4. `vite.config.ts` - Build Configuration
+### 5. `vite.config.ts` - Build Configuration
 
 - Uses `vite-plugin-singlefile` to bundle everything into one HTML file
 - `emptyOutDir: false` preserves server build output in dist/

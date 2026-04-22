@@ -20,7 +20,9 @@ Use the hosted MCP server directly with Claude's connector feature:
 
 1. Open [Claude.ai](https://claude.ai) and go to **Settings** → **Connectors**
 2. Click **Add custom connector** and enter:
-   - **Remote MCP server URL**: `https://ask-user-mcp-app.vercel.app/mcp`
+   - **Remote MCP server URL**: `https://ask-user-mcp-app-seven.vercel.app/mcp`
+
+Browse the hosted landing page at [ask-user-mcp-app-seven.vercel.app](https://ask-user-mcp-app-seven.vercel.app/) for a quick overview of the tool schema and install steps.
 3. Save and start a new conversation
 
 The `ask_user` tool will now be available to Claude.
